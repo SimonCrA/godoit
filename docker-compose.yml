@@ -1,0 +1,19 @@
+version: "3.3"
+
+services:
+  postgres:
+    image: postgres:16.1
+    ports:
+      - 5440:5432
+    volumes:
+      - "dbdata:/volumen/data:/var/lib/postgresql/data"
+      #- /home/jsalge/Docker/plantilla/volumen/db_test:/db_test
+      # copy the sql script to create tables
+      #- C:\Chichin\Docker\init-sql:/docker-entrypoint-initdb.d/
+    environment:
+      POSTGRES_DB: do_it
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      TZ: "America/Caracas"
+volumes:
+  dbdata:

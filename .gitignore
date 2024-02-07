@@ -1,0 +1,40 @@
+# Go specific
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/_test/
+
+# Dependency directories
+/vendor/
+/go.sum
+/go.mod
+
+# Compiled Object files, Static and Dynamic libs (Shared Objects)
+*.o
+*.a
+*.pyc
+
+# Log files
+*.log
+
+# Binary files
+*.bin
+
+# Coverage reports
+*.cover
+
+# IDE files
+.idea/
+.vscode/
+
+# System files
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Environment files
+.env
