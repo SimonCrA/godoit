@@ -26,40 +26,6 @@ func GetUsersHandler(db *gorm.DB) fiber.Handler {
 	}
 }
 
-func CreateUserHandler(db *gorm.DB) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		var newUser models.User
-
-		if err := c.BodyParser(&newUser); err != nil {
-			return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
-		}
-
-		if err := validateUserInput(&newUser); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
-		}
-
-		// Get the user from the context
-		userJwt := c.Locals("user").(*jwt.Token)
-		claims := userJwt.Claims.(jwt.MapClaims)
-		email := claims["email"].(string)
-
-		fmt.Println("Welcome 👋" + email)
-
-		hashedPsswd, err := hashPassword(newUser.Password)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).SendString("Error hashing password")
-		}
-
-		newUser.Password = hashedPsswd
-
-		if err := db.Create(&newUser).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).SendString("Error creating a new user")
-		}
-
-		return c.JSON(newUser)
-	}
-}
-
 func SignupHandler(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var newUser models.User
@@ -84,7 +50,11 @@ func SignupHandler(db *gorm.DB) fiber.Handler {
 		}
 
 		newUser.Password = hashedPsswd
+		newUser.FkIdCatStatus = 4 // usuario activo
+		newUser.PasswordExpirationDate = time.Now()
+		newUser.LastSession = time.Now()
 
+		fmt.Println(newUser)
 		if err := db.Create(&newUser).Error; err != nil {
 			return c.Status(fiber.StatusInternalServerError).SendString("Error creating a new user")
 		}
