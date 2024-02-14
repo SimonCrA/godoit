@@ -21,6 +21,9 @@ type Task struct {
 	CatCategory      CatCategory `gorm:"foreignKey:FkIdCatCategory"`
 }
 
-type TaskResponse struct {
-	IdTask uint `json:"idTask"`
+type TaskApiResponse struct {
+	ID            uint
+	Title         string
+	Description   string
+	FkIdCatStatus uint
 }

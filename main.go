@@ -5,13 +5,15 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/logger"
+
+	fiberLogger "github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/simoncra/godoit/config"
 	"github.com/simoncra/godoit/internal/models"
 	"github.com/simoncra/godoit/internal/routes"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 func main() {
@@ -22,7 +24,9 @@ func main() {
 	}
 
 	// initialize the database
-	db, err := gorm.Open(postgres.Open(config.DatabaseURL), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(config.DatabaseURL), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Info),
+	})
 	if err != nil {
 		log.Fatalf("Error connecting to the database: %v", err)
 	}
@@ -34,7 +38,7 @@ func main() {
 	app := fiber.New()
 
 	// set up middlewares
-	app.Use(logger.New())
+	app.Use(fiberLogger.New())
 	app.Use(cors.New())
 	app.Use(recover.New())
 	// app.Use(middlewares.NotFoundHandler)

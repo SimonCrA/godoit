@@ -41,9 +41,7 @@ func AddTaskHandler(db *gorm.DB) fiber.Handler {
 		}
 
 		// Return the token
-		return c.JSON(models.TaskResponse{
-			IdTask: newTask.ID,
-		})
+		return c.JSON("true")
 	}
 }
 
@@ -94,6 +92,37 @@ func UpdateTaskHandler(db *gorm.DB) fiber.Handler {
 
 		db.Save(taskDb)
 		return c.JSON(taskDb)
+	}
+}
+
+func ListTasksHandler(db *gorm.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// Get the user from the context
+		userJwt := c.Locals("user").(*jwt.Token)
+		claims := userJwt.Claims.(jwt.MapClaims)
+		userId := claims["ID"].(float64)
+
+		// idTask := c.Params("idTask")
+		// limit, _ := strconv.Atoi(c.Params("limit", "10"))
+		// page, _ := strconv.Atoi(c.Params("page", "0"))
+
+		var tasksDb []models.TaskApiResponse
+
+		err := db.Table("tasks").
+			// Where("current_task_date <= ?", time.Now()).
+
+			Select("tasks.id", "tasks.title", "tasks.description", "tasks.fk_id_cat_status").
+			Joins("left join users on users.id = tasks.fk_id_user").
+			Joins("left join cat_statuses on cat_statuses.id = tasks.fk_id_cat_status").
+			Where("users.id = ? AND tasks.logical_delete = ?", userId, false).
+			Order("tasks.created_at desc").
+			Scan(&tasksDb).
+			Error
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString("Error retrieving users from the database")
+		}
+
+		return c.JSON(&tasksDb)
 	}
 }
 
