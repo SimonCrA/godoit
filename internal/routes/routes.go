@@ -26,14 +26,15 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 	api := app.Group("/api")
 	v1 := api.Group("/v1")
 
-	v1.Get("/users", jwt, handlers.GetUsersHandler(db))
 	v1.Post("/login", handlers.LoginHandler(db))
 	v1.Post("/signup", handlers.SignupHandler(db))
 
-	// creamos un grupo tasks para manejar todas las rutas de tareas
-	task := v1.Group("/tasks")
+	v1.Get("/users", jwt, handlers.GetUsersHandler(db))
 
-	task.Post("/", jwt, handlers.AddTaskHandler(db))
-	task.Get("/", jwt, handlers.ListTasksHandler(db))
-	task.Put("/", jwt, handlers.UpdateTaskHandler(db))
+	// creamos un grupo tasks para manejar todas las rutas de tareas
+	task := v1.Group("/tasks", jwt)
+
+	task.Post("/", handlers.AddTaskHandler(db))
+	task.Get("/", handlers.ListTasksHandler(db))
+	task.Put("/", handlers.UpdateTaskHandler(db))
 }

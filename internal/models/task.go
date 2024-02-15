@@ -8,8 +8,8 @@ import (
 
 type Task struct {
 	gorm.Model
-	Title            string    `gorm:"size:30" validate:"min=3,max=30"`
-	Description      string    `gorm:"size:255" validate:"required,min=5,max=255"`
+	Title            string    `gorm:"size:30" validate:"omitempty,min=3,max=30"`
+	Description      string    `gorm:"size:255" validate:"omitempty,min=5,max=255"`
 	CurrentTaskDate  time.Time `gorm:"default:CURRENT_TIMESTAMP"`
 	LastStatusChange time.Time `gorm:"default:CURRENT_TIMESTAMP"`
 	LogicalDelete    bool      `gorm:"default:false"`
@@ -22,8 +22,10 @@ type Task struct {
 }
 
 type TaskApiResponse struct {
-	ID            uint
-	Title         string
-	Description   string
-	FkIdCatStatus uint
+	ID              uint
+	Title           string
+	Description     string
+	FkIdCatStatus   uint
+	Name            string
+	CurrentTaskDate string
 }

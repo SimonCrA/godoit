@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -48,6 +49,7 @@ func AddTaskHandler(db *gorm.DB) fiber.Handler {
 func UpdateTaskHandler(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var task models.Task
+		var taskDb models.Task
 
 		// Get the user from the context
 		userJwt := c.Locals("user").(*jwt.Token)
@@ -62,13 +64,17 @@ func UpdateTaskHandler(db *gorm.DB) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 
-		idTask := c.Params("idTask")
+		reqQuery := c.Queries()
+		idTask := reqQuery["idTask"]
 
-		fmt.Println(idTask)
-
-		var taskDb models.Task
-		if err := db.First(&taskDb, idTask).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).SendString("Error retrieving users from the database")
+		if err := db.Where("tasks.id = ? and tasks.fk_id_user = ?", idTask, userId).First(&taskDb).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				// Handle "record not found" error
+				return c.Status(fiber.StatusNotFound).SendString("Task not found")
+			} else {
+				// Handle other errors
+				return c.Status(fiber.StatusInternalServerError).SendString("Error retrieving task from the database")
+			}
 		}
 
 		if !task.CurrentTaskDate.IsZero() {
@@ -111,7 +117,7 @@ func ListTasksHandler(db *gorm.DB) fiber.Handler {
 		err := db.Table("tasks").
 			// Where("current_task_date <= ?", time.Now()).
 
-			Select("tasks.id", "tasks.title", "tasks.description", "tasks.fk_id_cat_status").
+			Select("tasks.id, tasks.title, tasks.description, tasks.fk_id_cat_status, tasks.current_task_date, cat_statuses.name as Name").
 			Joins("left join users on users.id = tasks.fk_id_user").
 			Joins("left join cat_statuses on cat_statuses.id = tasks.fk_id_cat_status").
 			Where("users.id = ? AND tasks.logical_delete = ?", userId, false).
@@ -122,7 +128,31 @@ func ListTasksHandler(db *gorm.DB) fiber.Handler {
 			return c.Status(fiber.StatusInternalServerError).SendString("Error retrieving users from the database")
 		}
 
-		return c.JSON(&tasksDb)
+		todayTasks := []models.TaskApiResponse{}
+		tomorrowTasks := []models.TaskApiResponse{}
+
+		currentTime := time.Now()
+		tomorrowTime := currentTime.Add(24 * time.Hour)
+
+		for _, task := range tasksDb {
+			currentDbTaskDate, err := time.Parse(time.RFC3339Nano, task.CurrentTaskDate)
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).SendString("Internal server error, parsing dates.")
+			}
+
+			if currentDbTaskDate.Day() == currentTime.Day() && currentDbTaskDate.Month() == currentTime.Month() && currentDbTaskDate.Year() == currentTime.Year() {
+				todayTasks = append(todayTasks, task)
+			} else if currentDbTaskDate.Day() == tomorrowTime.Day() && currentDbTaskDate.Month() == tomorrowTime.Month() && currentDbTaskDate.Year() == tomorrowTime.Year() {
+				tomorrowTasks = append(tomorrowTasks, task)
+			}
+		}
+
+		taskMap := map[string][]models.TaskApiResponse{
+			"today":    todayTasks,
+			"tomorrow": tomorrowTasks,
+		}
+
+		return c.JSON(taskMap)
 	}
 }
 
