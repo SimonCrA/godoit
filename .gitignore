@@ -38,3 +38,5 @@ desktop.ini
 
 # Environment files
 .env
+
+tmp/

@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
-	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/simoncra/godoit/internal/models"
 	"gorm.io/gorm"
 )
@@ -17,22 +16,19 @@ func AddTaskHandler(db *gorm.DB) fiber.Handler {
 		var newTask models.Task
 
 		// Get the user from the context
-		userJwt := c.Locals("user").(*jwt.Token)
-		claims := userJwt.Claims.(jwt.MapClaims)
-		email := claims["email"].(string)
-		userId := claims["ID"].(float64)
+		idUser, ok := c.Locals("idUser").(float64)
+		if !ok {
+			return c.Status(fiber.StatusBadRequest).SendString("JWT not correct.")
+		}
 
 		if err := c.BodyParser(&newTask); err != nil {
 			return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
 		}
 
-		fmt.Println("Welcome 👋" + email)
-		fmt.Println(int(userId))
-
 		if err := validateTaskInput(&newTask); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
-		newTask.FkIdUser = int(userId)
+		newTask.FkIdUser = int(idUser)
 		newTask.FkIdCatStatus = 1
 		newTask.FkIdCatCategory = 1
 
@@ -48,26 +44,27 @@ func AddTaskHandler(db *gorm.DB) fiber.Handler {
 
 func UpdateTaskHandler(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		var task models.Task
+		var taskToUpdate models.Task
 		var taskDb models.Task
 
 		// Get the user from the context
-		userJwt := c.Locals("user").(*jwt.Token)
-		claims := userJwt.Claims.(jwt.MapClaims)
-		userId := claims["ID"].(float64)
+		idUser, ok := c.Locals("idUser").(float64)
+		if !ok {
+			return c.Status(fiber.StatusBadRequest).SendString("JWT not correct.")
+		}
 
-		if err := c.BodyParser(&task); err != nil {
+		if err := c.BodyParser(&taskToUpdate); err != nil {
 			return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
 		}
 
-		if err := validateTaskInput(&task); err != nil {
+		if err := validateTaskInput(&taskToUpdate); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 
 		reqQuery := c.Queries()
 		idTask := reqQuery["idTask"]
 
-		if err := db.Where("tasks.id = ? and tasks.fk_id_user = ?", idTask, userId).First(&taskDb).Error; err != nil {
+		if err := db.Where("tasks.id = ? and tasks.fk_id_user = ?", idTask, idUser).First(&taskDb).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				// Handle "record not found" error
 				return c.Status(fiber.StatusNotFound).SendString("Task not found")
@@ -77,50 +74,54 @@ func UpdateTaskHandler(db *gorm.DB) fiber.Handler {
 			}
 		}
 
-		if !task.CurrentTaskDate.IsZero() {
-			taskDb.CurrentTaskDate = task.CurrentTaskDate
+		if !taskToUpdate.CurrentTaskDate.IsZero() {
+			taskDb.CurrentTaskDate = taskToUpdate.CurrentTaskDate
 		}
 
-		if task.Title != "" {
-			taskDb.Title = task.Title
+		if taskToUpdate.Title != "" {
+			taskDb.Title = taskToUpdate.Title
 		}
 
-		if task.Description != "" {
-			taskDb.Description = task.Description
+		if taskToUpdate.Description != "" {
+			taskDb.Description = taskToUpdate.Description
 		}
 
-		if task.CatCategory.ID < 1 {
-			taskDb.Description = task.Description
+		if taskToUpdate.FkIdCatCategory > 0 {
+			taskDb.FkIdCatCategory = taskToUpdate.FkIdCatCategory
 		}
 
-		taskDb.FkIdUser = int(userId)
-		taskDb.LastStatusChange = time.Now()
+		taskDb.FkIdUser = int(idUser)
+
+		if taskToUpdate.FkIdCatStatus > 0 {
+			taskDb.FkIdCatStatus = taskToUpdate.FkIdCatStatus
+			taskDb.LastStatusChange = time.Now()
+		}
 
 		db.Save(taskDb)
-		return c.JSON(taskDb)
+		return c.JSON("updated")
 	}
 }
 
 func ListTasksHandler(db *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Get the user from the context
-		userJwt := c.Locals("user").(*jwt.Token)
-		claims := userJwt.Claims.(jwt.MapClaims)
-		userId := claims["ID"].(float64)
-
-		// idTask := c.Params("idTask")
-		// limit, _ := strconv.Atoi(c.Params("limit", "10"))
-		// page, _ := strconv.Atoi(c.Params("page", "0"))
+		idUser, ok := c.Locals("idUser").(float64)
+		if !ok {
+			return c.Status(fiber.StatusBadRequest).SendString("JWT not correct.")
+		}
 
 		var tasksDb []models.TaskApiResponse
 
-		err := db.Table("tasks").
-			// Where("current_task_date <= ?", time.Now()).
+		currentTime := time.Now()
+		tomorrowTime := currentTime.Add(24 * time.Hour)
 
+		today := time.Date(currentTime.Year(), currentTime.Month(), currentTime.Day(), 00, 00, 00, 000, time.Local)
+
+		err := db.Table("tasks").
 			Select("tasks.id, tasks.title, tasks.description, tasks.fk_id_cat_status, tasks.current_task_date, cat_statuses.name as Name").
 			Joins("left join users on users.id = tasks.fk_id_user").
 			Joins("left join cat_statuses on cat_statuses.id = tasks.fk_id_cat_status").
-			Where("users.id = ? AND tasks.logical_delete = ?", userId, false).
+			Where("users.id = ? and tasks.logical_delete = ? and tasks.current_task_date >= ?", idUser, false, today).
 			Order("tasks.created_at desc").
 			Scan(&tasksDb).
 			Error
@@ -130,9 +131,6 @@ func ListTasksHandler(db *gorm.DB) fiber.Handler {
 
 		todayTasks := []models.TaskApiResponse{}
 		tomorrowTasks := []models.TaskApiResponse{}
-
-		currentTime := time.Now()
-		tomorrowTime := currentTime.Add(24 * time.Hour)
 
 		for _, task := range tasksDb {
 			currentDbTaskDate, err := time.Parse(time.RFC3339Nano, task.CurrentTaskDate)

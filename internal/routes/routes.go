@@ -17,22 +17,22 @@ func SetupRoutes(app *fiber.App, db *gorm.DB) {
 		log.Fatalf("Error loading configuration: %v", err)
 	}
 
+	// declaramos el middleware del token jwt
+	authMiddleware := middlewares.NewAuthMiddleware(config.AppSecret)
+
 	// main route
 	app.Get("/", handlers.HomeHandler)
-
-	// declaramos el middleware del token jtw
-	jwt := middlewares.NewAuthMiddleware(config.AppSecret)
-
 	api := app.Group("/api")
 	v1 := api.Group("/v1")
 
 	v1.Post("/login", handlers.LoginHandler(db))
 	v1.Post("/signup", handlers.SignupHandler(db))
-
-	v1.Get("/users", jwt, handlers.GetUsersHandler(db))
+	// v1.Get("/users", jwt, handlers.GetUsersHandler(db))
 
 	// creamos un grupo tasks para manejar todas las rutas de tareas
-	task := v1.Group("/tasks", jwt)
+	task := v1.Group("/tasks")
+
+	task.Use(authMiddleware)
 
 	task.Post("/", handlers.AddTaskHandler(db))
 	task.Get("/", handlers.ListTasksHandler(db))
