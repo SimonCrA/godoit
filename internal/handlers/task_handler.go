@@ -115,18 +115,21 @@ func ListTasksHandler(db *gorm.DB) fiber.Handler {
 		currentTime := time.Now()
 		tomorrowTime := currentTime.Add(24 * time.Hour)
 
-		today := time.Date(currentTime.Year(), currentTime.Month(), currentTime.Day(), 00, 00, 00, 000, time.Local)
-
 		err := db.Table("tasks").
 			Select("tasks.id, tasks.title, tasks.description, tasks.fk_id_cat_status, tasks.current_task_date, cat_statuses.name as Name").
 			Joins("left join users on users.id = tasks.fk_id_user").
 			Joins("left join cat_statuses on cat_statuses.id = tasks.fk_id_cat_status").
-			Where("users.id = ? and tasks.logical_delete = ? and tasks.current_task_date >= ?", idUser, false, today).
+			Where("users.id = ? and tasks.logical_delete = ?", idUser, false).
 			Order("tasks.created_at desc").
 			Scan(&tasksDb).
 			Error
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).SendString("Error retrieving users from the database")
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				// Handle "record not found" error
+				return c.Status(fiber.StatusNotFound).SendString("Tasks not found")
+			}else {
+			  return c.Status(fiber.StatusInternalServerError).SendString("Error retrieving users from the database")
+      }
 		}
 
 		todayTasks := []models.TaskApiResponse{}
@@ -138,8 +141,10 @@ func ListTasksHandler(db *gorm.DB) fiber.Handler {
 				return c.Status(fiber.StatusInternalServerError).SendString("Internal server error, parsing dates.")
 			}
 
-			if currentDbTaskDate.Day() == currentTime.Day() && currentDbTaskDate.Month() == currentTime.Month() && currentDbTaskDate.Year() == currentTime.Year() {
-				todayTasks = append(todayTasks, task)
+      if currentDbTaskDate.Day() <= currentTime.Day() && currentDbTaskDate.Month() <= currentTime.Month() && currentDbTaskDate.Year() <= currentTime.Year() {
+        if task.FkIdCatStatus == 1 {
+				  todayTasks = append(todayTasks, task)
+        }
 			} else if currentDbTaskDate.Day() == tomorrowTime.Day() && currentDbTaskDate.Month() == tomorrowTime.Month() && currentDbTaskDate.Year() == tomorrowTime.Year() {
 				tomorrowTasks = append(tomorrowTasks, task)
 			}
